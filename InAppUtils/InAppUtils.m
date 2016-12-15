@@ -40,7 +40,7 @@ RCT_EXPORT_MODULE()
                     callback(@[RCTJSErrorFromNSError(transaction.error)]);
                     [_callbacks removeObjectForKey:key];
                 } else {
-                    callback = _defaultCallbacks[@"transactionStateFailed"];
+                    callback = _defaultCallbacks[RCTKeyForInstance(@"transactionStateFailed")];
                     if (callback) {
                         callback(@[RCTJSErrorFromNSError(transaction.error)]);
                     }
@@ -62,9 +62,9 @@ RCT_EXPORT_MODULE()
                     callback(@[[NSNull null], purchase]);
                     [_callbacks removeObjectForKey:key];
                 } else {
-                    callback = _defaultCallbacks[@"transactionStatePurchased"];
+                    callback = _defaultCallbacks[RCTKeyForInstance(@"transactionStatePurchased")];
                     if (callback) {
-                        callback(@[RCTJSErrorFromNSError(transaction.error)]);
+                        callback(@[purchase]);
                     }
                     else {
                         RCTLogWarn(@"No callback registered for transaction with state purchased.");
@@ -190,26 +190,32 @@ RCT_EXPORT_METHOD(setDefaultCallbacks:(NSDictionary *)defaultCallbacks)
 {
     NSString *key = RCTKeyForInstance(request);
     RCTResponseSenderBlock callback = _callbacks[key];
+    products = [NSMutableArray arrayWithArray:response.products];
+    NSMutableArray *productsArrayForJS = [NSMutableArray array];
+    for(SKProduct *item in response.products) {
+        NSDictionary *product = @{
+                                  @"identifier": item.productIdentifier,
+                                  @"price": item.price,
+                                  @"currencySymbol": [item.priceLocale objectForKey:NSLocaleCurrencySymbol],
+                                  @"currencyCode": [item.priceLocale objectForKey:NSLocaleCurrencyCode],
+                                  @"priceString": item.priceString,
+                                  @"downloadable": item.downloadable ? @"true" : @"false" ,
+                                  @"description": item.localizedDescription ? item.localizedDescription : @"",
+                                  @"title": item.localizedTitle ? item.localizedTitle : @"",
+                                  };
+        [productsArrayForJS addObject:product];
+    }
     if (callback) {
-        products = [NSMutableArray arrayWithArray:response.products];
-        NSMutableArray *productsArrayForJS = [NSMutableArray array];
-        for(SKProduct *item in response.products) {
-            NSDictionary *product = @{
-                                      @"identifier": item.productIdentifier,
-                                      @"price": item.price,
-                                      @"currencySymbol": [item.priceLocale objectForKey:NSLocaleCurrencySymbol],
-                                      @"currencyCode": [item.priceLocale objectForKey:NSLocaleCurrencyCode],
-                                      @"priceString": item.priceString,
-                                      @"downloadable": item.downloadable ? @"true" : @"false" ,
-                                      @"description": item.localizedDescription ? item.localizedDescription : @"",
-                                      @"title": item.localizedTitle ? item.localizedTitle : @"",
-                                      };
-            [productsArrayForJS addObject:product];
-        }
         callback(@[[NSNull null], productsArrayForJS]);
         [_callbacks removeObjectForKey:key];
     } else {
-        RCTLogWarn(@"No callback registered for load product request.");
+        callback = _defaultCallbacks[RCTKeyForInstance(@"loadProductRequest")];
+        if (callback) {
+            callback(@[[NSNull null], productsArrayForJS]);
+        }
+        else {
+            RCTLogWarn(@"No callback registered for load product request.");
+        }
     }
 }
 
