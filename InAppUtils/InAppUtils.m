@@ -8,6 +8,8 @@
 {
     NSArray *products;
     NSMutableDictionary *_callbacks;
+    NSMutableDictionary *_defaultCallbacks;
+
 }
 
 - (instancetype)init
@@ -162,6 +164,13 @@ RCT_EXPORT_METHOD(receiptData:(RCTResponseSenderBlock)callback)
       callback(@[@"not_available"]);
     } else {
       callback(@[[NSNull null], [receiptData base64EncodedStringWithOptions:0]]);
+    }
+}
+
+RCT_EXPORT_METHOD(setDefaultCallbacks:(NSDictionary *)defaultCallbacks)
+{
+    for (NSString* key in defaultCallbacks) {
+        _defaultCallbacks[RCTKeyForInstance(key)] = [defaultCallbacks objectForKey:key];
     }
 }
 
