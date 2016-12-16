@@ -9,6 +9,8 @@
     NSArray *products;
     NSMutableDictionary *_callbacks;
     NSMutableDictionary *_defaultCallbacks;
+    NSString *defaultPurchasedCallbackKey;
+    NSString *defaultFailedCallbackKey;
 }
 
 - (instancetype)init
@@ -16,6 +18,8 @@
     if ((self = [super init])) {
         _callbacks = [[NSMutableDictionary alloc] init];
         _defaultCallbacks = [[NSMutableDictionary alloc] init];
+        defaultPurchasedCallbackKey = @"defaultPurchasedCallback";
+        defaultFailedCallbackKey = @"defaultFailedCallback";
         [[SKPaymentQueue defaultQueue] addTransactionObserver:self];
     }
     return self;
@@ -40,7 +44,7 @@ RCT_EXPORT_MODULE()
                     callback(@[RCTJSErrorFromNSError(transaction.error)]);
                     [_callbacks removeObjectForKey:key];
                 } else {
-                    callback = _defaultCallbacks[RCTKeyForInstance(@"transactionStateFailed")];
+                    callback = _defaultCallbacks[RCTKeyForInstance(defaultFailedCallbackKey)];
                     if (callback) {
                         callback(@[RCTJSErrorFromNSError(transaction.error)]);
                     }
@@ -62,7 +66,7 @@ RCT_EXPORT_MODULE()
                     callback(@[[NSNull null], purchase]);
                     [_callbacks removeObjectForKey:key];
                 } else {
-                    callback = _defaultCallbacks[RCTKeyForInstance(@"transactionStatePurchased")];
+                    callback = _defaultCallbacks[RCTKeyForInstance(defaultPurchasedCallbackKey)];
                     if (callback) {
                         callback(@[purchase]);
                     }
@@ -130,7 +134,6 @@ restoreCompletedTransactionsFailedWithError:(NSError *)error
         for(SKPaymentTransaction *transaction in queue.transactions){
             if(transaction.transactionState == SKPaymentTransactionStateRestored) {
                 NSDictionary *purchase = @{
-                                           @"originalTransactionIdentifier": transaction.originalTransaction.transactionIdentifier,
                                            @"transactionIdentifier": transaction.transactionIdentifier,
                                            @"productIdentifier": transaction.payment.productIdentifier
                                            };
@@ -177,11 +180,13 @@ RCT_EXPORT_METHOD(receiptData:(RCTResponseSenderBlock)callback)
     }
 }
 
-RCT_EXPORT_METHOD(setDefaultCallbacks:(NSDictionary *)defaultCallbacks)
+RCT_EXPORT_METHOD(setDefaultPurchasedCallback:(RCTResponseSenderBlock)callback)
 {
-    for (NSString* key in defaultCallbacks) {
-        _defaultCallbacks[RCTKeyForInstance(key)] = [defaultCallbacks objectForKey:key];
-    }
+    _defaultCallbacks[RCTKeyForInstance(defaultPurchasedCallbackKey)] = callback;
+}
+RCT_EXPORT_METHOD(setDefaultFailedCallback:(RCTResponseSenderBlock)callback)
+{
+    _defaultCallbacks[RCTKeyForInstance(defaultFailedCallbackKey)] = callback;
 }
 
 // SKProductsRequestDelegate protocol method
@@ -209,13 +214,7 @@ RCT_EXPORT_METHOD(setDefaultCallbacks:(NSDictionary *)defaultCallbacks)
         callback(@[[NSNull null], productsArrayForJS]);
         [_callbacks removeObjectForKey:key];
     } else {
-        callback = _defaultCallbacks[RCTKeyForInstance(@"loadProductRequest")];
-        if (callback) {
-            callback(@[[NSNull null], productsArrayForJS]);
-        }
-        else {
-            RCTLogWarn(@"No callback registered for load product request.");
-        }
+        RCTLogWarn(@"No callback registered for load product request.");
     }
 }
 
