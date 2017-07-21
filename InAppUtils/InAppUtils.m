@@ -1,7 +1,7 @@
 #import "InAppUtils.h"
 #import <StoreKit/StoreKit.h>
-#import "RCTLog.h"
-#import "RCTUtils.h"
+#import <React/RCTLog.h>
+#import <React/RCTUtils.h>
 #import "SKProduct+StringPrice.h"
 
 @implementation InAppUtils
@@ -59,8 +59,10 @@ RCT_EXPORT_MODULE()
                 NSString *key = RCTKeyForInstance(transaction.payment.productIdentifier);
                 RCTResponseSenderBlock callback = _callbacks[key];
                 NSDictionary *purchase = @{
-                                           @"transactionIdentifier": transaction.transactionIdentifier,
-                                           @"productIdentifier": transaction.payment.productIdentifier
+                                              @"transactionDate": @(transaction.transactionDate.timeIntervalSince1970 * 1000),
+                                              @"transactionIdentifier": transaction.transactionIdentifier,
+                                              @"productIdentifier": transaction.payment.productIdentifier,
+                                              @"transactionReceipt": [[transaction transactionReceipt] base64EncodedStringWithOptions:0]
                                            };
                 if (callback) {
                     callback(@[[NSNull null], purchase]);
@@ -118,7 +120,16 @@ restoreCompletedTransactionsFailedWithError:(NSError *)error
     NSString *key = RCTKeyForInstance(@"restoreRequest");
     RCTResponseSenderBlock callback = _callbacks[key];
     if (callback) {
-        callback(@[@"restore_failed"]);
+        switch (error.code)
+        {
+            case SKErrorPaymentCancelled:
+                callback(@[@"user_cancelled"]);
+                break;
+            default:
+                callback(@[@"restore_failed"]);
+                break;
+        }
+        
         [_callbacks removeObjectForKey:key];
     } else {
         RCTLogWarn(@"No callback registered for restore product request.");
@@ -133,10 +144,19 @@ restoreCompletedTransactionsFailedWithError:(NSError *)error
         NSMutableArray *productsArrayForJS = [NSMutableArray array];
         for(SKPaymentTransaction *transaction in queue.transactions){
             if(transaction.transactionState == SKPaymentTransactionStateRestored) {
-                NSDictionary *purchase = @{
-                                           @"transactionIdentifier": transaction.transactionIdentifier,
-                                           @"productIdentifier": transaction.payment.productIdentifier
-                                           };
+                NSMutableDictionary *purchase = [NSMutableDictionary dictionaryWithDictionary: @{
+                    @"transactionDate": @(transaction.transactionDate.timeIntervalSince1970 * 1000),
+                    @"transactionIdentifier": transaction.transactionIdentifier,
+                    @"productIdentifier": transaction.payment.productIdentifier,
+                    @"transactionReceipt": [[transaction transactionReceipt] base64EncodedStringWithOptions:0]
+                }];
+
+                SKPaymentTransaction *originalTransaction = transaction.originalTransaction;
+                if (originalTransaction) {
+                    purchase[@"originalTransactionDate"] = @(originalTransaction.transactionDate.timeIntervalSince1970 * 1000);
+                    purchase[@"originalTransactionIdentifier"] = originalTransaction.transactionIdentifier;
+                }
+
                 [productsArrayForJS addObject:purchase];
                 [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
             }
@@ -167,6 +187,12 @@ RCT_EXPORT_METHOD(loadProducts:(NSArray *)productIdentifiers
     } else {
         callback(@[@"not_available"]);
     }
+}
+
+RCT_EXPORT_METHOD(canMakePayments: (RCTResponseSenderBlock)callback)
+{
+    BOOL canMakePayments = [SKPaymentQueue canMakePayments];
+    callback(@[@(canMakePayments)]);
 }
 
 RCT_EXPORT_METHOD(receiptData:(RCTResponseSenderBlock)callback)
@@ -215,6 +241,16 @@ RCT_EXPORT_METHOD(setDefaultFailedCallback:(RCTResponseSenderBlock)callback)
         [_callbacks removeObjectForKey:key];
     } else {
         RCTLogWarn(@"No callback registered for load product request.");
+    }
+}
+
+// SKProductsRequestDelegate network error
+- (void)request:(SKRequest *)request didFailWithError:(NSError *)error{
+    NSString *key = RCTKeyForInstance(request);
+    RCTResponseSenderBlock callback = _callbacks[key];
+    if(callback) {
+        callback(@[RCTJSErrorFromNSError(error)]);
+        [_callbacks removeObjectForKey:key];
     }
 }
 
